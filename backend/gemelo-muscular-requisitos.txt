@@ -1,0 +1,37 @@
+Prompt Final para el Equipo de Frontend (Vercel + Supabase)
+Pásales exactamente este texto (ya incluye la arquitectura de comunicación directa con Supabase para cuando el Frontend esté alojado en Vercel):
+Objetivo del Módulo Frontend (Vercel): Gemelo Digital 3D del Sistema Muscular del Astronauta
+Necesitamos implementar en el dashboard médico (alojado en Vercel) un módulo interactivo que renderice en 3D (rotación 360° y zoom) un modelo anatómico del sistema muscular humano completo (con relieve esculpido de fibras musculares estriadas —pectorales, recto abdominal, deltoides, bíceps, cuádriceps, gemelos, esternocleidomastoideo— sobre fondo oscuro limpio), escalado exactamente a las proporciones corporales reales de cada astronauta.
+Arquitectura de Conexión (Vercel ↔ Supabase):
+Dado que el Frontend estará en Vercel (HTTPS) y el motor de visión por computadora corre en la estación local con la cámara, toda la sincronización se realiza directamente a través de Supabase (sin llamadas a localhost):
+	Tabla fuente: public.musculoskeletal_scans (filtrada por crew_member_id, ordenada por created_at DESC).
+	Al presionar el botón "Iniciar Reconstrucción Profunda" (o al recibir un nuevo escaneo desde la cámara), el Frontend debe suscribirse vía Supabase Realtime (o hacer polling cada 2 segundos) a los nuevos registros insertados en public.musculoskeletal_scans y actualizar el modelo 3D automáticamente.
+Estructura Exacta de Datos que Recibirán de Supabase:
+	posture_symmetry_score (float, 0–100): Puntaje global de simetría postural.
+	blue_suit_verified (boolean): Confirmación de calibración biométrica con traje ajustado (#1D55AF).
+	skeleton_3d_joints (jsonb): Objeto con las 17 articulaciones anatómicas (nose, left_eye, right_eye, left_ear, right_ear, left_shoulder, right_shoulder, left_elbow, right_elbow, left_wrist, right_wrist, left_hip, right_hip, left_knee, right_knee, left_ankle, right_ankle). Cada nodo contiene { "x": float, "y": float, "z": float, "confidence": float } en un sistema cartesiano derecho normalizado (+Y hacia arriba, +Z hacia el frente/pecho, origen (0,0,0) en el centro de la pelvis).
+	biomechanical_metrics.anatomical_proportions (jsonb): Medidas antropométricas exactas normalizadas respecto al largo axial del torso (torso_axial_length = 1.0):
+	widths: biacromial_shoulder_width, waist_width_estimated, biiliac_hip_width.
+	depths_z: chest_anteroposterior_depth, waist_anteroposterior_depth, pelvis_anteroposterior_depth (profundidades volumétricas reales del pecho, cintura y pelvis).
+	segment_lengths: cervical_head_height, humerus_upper_arm_length, radius_forearm_length, femur_thigh_length, tibia_shin_length.
+	biomechanical_metrics.muscle_group_status (jsonb): Estado de tensión/carga por grupo muscular ("optimal", "moderate", "elevated").
+Qué debe lograr el componente visual en Vercel:
+	Reconstrucción Volumétrica a Escala Real: Usar la librería 3D de su elección para deformar/escalar los huesos y el volumen muscular del torso, ancho de hombros, profundidad pectoral/pélvica y longitud de extremidades usando los vectores de skeleton_3d_joints y las proporciones de anatomical_proportions.
+	Indicadores Clínicos y Mapa de Calor Muscular: Mostrar el puntaje posture_symmetry_score, los grados de inclinación (shoulder_tilt_deg, pelvic_tilt_deg, spinal_lateral_deviation_pct) y resaltar visualmente en el modelo 3D los grupos musculares de muscle_group_status según su nivel (optimal / moderate / elevated).
+
+
+Indícale al equipo de Frontend que su botón "Iniciar Reconstrucción Profunda" solo tiene que ejecutar:
+// 1. Al hacer clic en el botón en Vercel:
+await supabase.from('scan_commands').insert({
+  crew_member_id: selectedAstronautId,
+  command: 'start_deep_reconstruction',
+  status: 'pending'
+});
+
+// 2. Escuchar en tiempo real cuando la cámara local inserte el modelo 3D:
+supabase
+  .channel('scans-channel')
+  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'musculoskeletal_scans' }, (payload) => {
+    render3DMuscleModel(payload.new); // Recibe skeleton_3d_joints y anatomical_proportions
+  })
+  .subscribe();
