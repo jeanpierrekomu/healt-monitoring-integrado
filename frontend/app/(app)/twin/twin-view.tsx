@@ -3,11 +3,12 @@
 // Gemelo muscular 3D: muestra el último escaneo de cuerpo del astronauta (tabla `musculoskeletal_scans`),
 // con sus indicadores de postura y el estado de cada grupo muscular. El botón "Iniciar reconstrucción
 // profunda" deja un comando para la estación con cámara y la pantalla espera el escaneo nuevo.
-import { Flame, Loader2, Orbit, RotateCw, ScanLine, ShieldCheck, ShieldAlert, Waypoints } from "lucide-react";
+import { Camera, Flame, Loader2, Orbit, RotateCw, ScanLine, ShieldCheck, ShieldAlert, Waypoints } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PageHeader, Progress } from "@/components/ui/animated";
 import { Button, Card, CardTitle, Pill, type PillTone } from "@/components/ui/primitives";
+import { CameraScan, type Lean } from "@/components/twin/camera-scan";
 import { cn } from "@/lib/utils";
 import {
   DEFAULT_JOINTS, fetchLatestScan, fetchScanCount, GROUP_LABEL, LEVEL_COLOR, LEVEL_LABEL, muscleLevels, requestDeepScan,
@@ -64,6 +65,9 @@ export function TwinView({ astronauts }: { astronauts: { id: string; name: strin
   const [heat, setHeat] = useState(true);
   const [showJoints, setShowJoints] = useState(false);
   const [spin, setSpin] = useState(true);
+  const [scanning, setScanning] = useState(false); // cámara de este equipo en vivo
+  const [lean, setLean] = useState<Lean | null>(null);
+  const [local, setLocal] = useState(false); // el escaneo mostrado se hizo aquí, no viene del backend
   const lastId = useRef(0);
   const askedAt = useRef(0);
   const person = astronauts.find((a) => a.id === crewId);
@@ -72,12 +76,15 @@ export function TwinView({ astronauts }: { astronauts: { id: string; name: strin
   useEffect(() => {
     if (!crewId || !HAS_BACKEND) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- sin backend no hay nada que cargar
-      setLoad(HAS_BACKEND ? "ready" : "error");
+      setLoad("ready");
       return;
     }
     let stopped = false;
     lastId.current = 0;
     setScan(null);
+    setLocal(false);
+    setScanning(false);
+    setLean(null);
     setLoad("loading");
     setRequest("idle");
     const pull = async (first: boolean) => {
@@ -88,6 +95,7 @@ export function TwinView({ astronauts }: { astronauts: { id: string; name: strin
         if (latest && latest.id !== lastId.current) {
           lastId.current = latest.id;
           setScan(latest);
+          setLocal(false);
           setCount(await fetchScanCount(crewId));
           // Si se estaba esperando una reconstrucción y llegó un escaneo posterior al pedido, ya está.
           if (!first && askedAt.current && new Date(latest.created_at).getTime() >= askedAt.current - 5000) {
@@ -122,6 +130,18 @@ export function TwinView({ astronauts }: { astronauts: { id: string; name: strin
     }
   }, [crewId]);
 
+  // Cámara en vivo: cada escaneo armado en este equipo reemplaza al anterior y el modelo lo sigue.
+  const onLiveFrame = useCallback((sc: MuscleScan, l: Lean) => {
+    setScan(sc);
+    setLean(l);
+    setLocal(true);
+    setNow(Date.now());
+  }, []);
+  const stopLive = useCallback(() => {
+    setScanning(false);
+    setLean(null);
+  }, []);
+
   const m = scan?.biomechanical_metrics;
   const levels = muscleLevels(scan);
   const score = scan?.posture_symmetry_score;
@@ -134,10 +154,15 @@ export function TwinView({ astronauts }: { astronauts: { id: string; name: strin
         title="Gemelo muscular 3D"
         subtitle="Reconstrucción del cuerpo del astronauta a partir del escaneo con cámara: postura, proporciones y carga muscular."
         actions={
+          <>
+          <Button variant="secondary" onClick={() => (scanning ? stopLive() : setScanning(true))} disabled={!crewId}>
+            <Camera className="size-4" /> {scanning ? "Apagar cámara" : "Cámara en vivo"}
+          </Button>
           <Button onClick={start} disabled={busy || !HAS_BACKEND || !crewId}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : <ScanLine className="size-4" />}
             {request === "sending" ? "Enviando…" : request === "waiting" ? "Esperando a la estación…" : "Iniciar reconstrucción profunda"}
           </Button>
+          </>
         }
       />
 
@@ -164,12 +189,21 @@ export function TwinView({ astronauts }: { astronauts: { id: string; name: strin
               levels={levels}
               heat={heat && !!scan}
               showJoints={showJoints}
-              spin={spin}
+              spin={spin && !scanning}
+              lean={scanning ? lean : null}
             />
             <div className="pointer-events-none absolute top-4 left-4 flex flex-col gap-1.5">
               <span className="rounded-md bg-black/55 px-2 py-1 font-mono text-[11px] text-fg backdrop-blur">{person?.name ?? "—"}</span>
-              <span className={cn("rounded-md px-2 py-1 text-[11px] font-semibold backdrop-blur", scan ? "bg-normal/20 text-normal" : "bg-black/55 text-muted")}>
-                {load === "loading" ? "Cargando escaneo…" : scan ? `Escaneo real · ${ago(scan.created_at, now)}` : "Sin escaneos: figura de referencia"}
+              <span className={cn("rounded-md px-2 py-1 text-[11px] font-semibold backdrop-blur", !scan ? "bg-black/55 text-muted" : local ? "bg-primary/20 text-primary" : "bg-normal/20 text-normal")}>
+                {load === "loading"
+                  ? "Cargando escaneo…"
+                  : !scan
+                    ? "Sin escaneos: figura de referencia"
+                    : scanning
+                      ? "En vivo · cámara de este equipo"
+                      : local
+                        ? `Captura de la cámara · ${ago(scan.created_at, now)}`
+                      : `Escaneo real · ${ago(scan.created_at, now)}`}
               </span>
             </div>
             {heat && scan && (
@@ -181,7 +215,13 @@ export function TwinView({ astronauts }: { astronauts: { id: string; name: strin
                 ))}
               </div>
             )}
-            <p className="pointer-events-none absolute right-4 bottom-4 text-[11px] text-muted">Arrastra para girar · rueda para acercar</p>
+            {scanning ? (
+              <div className="absolute right-4 bottom-4 h-[190px] w-[300px] max-w-[45%]">
+                <CameraScan crewId={crewId} onFrame={onLiveFrame} onClose={stopLive} />
+              </div>
+            ) : (
+              <p className="pointer-events-none absolute right-4 bottom-4 text-[11px] text-muted">Arrastra para girar · rueda para acercar</p>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2 px-2 pt-3 pb-1 text-[13px]">
@@ -222,7 +262,7 @@ export function TwinView({ astronauts }: { astronauts: { id: string; name: strin
           <Card>
             <CardTitle
               title="Simetría postural"
-              subtitle={scan ? `${count} ${count === 1 ? "escaneo guardado" : "escaneos guardados"}` : undefined}
+              subtitle={!scan ? undefined : local ? "Estimado en este equipo con la cámara" : `${count} ${count === 1 ? "escaneo guardado" : "escaneos guardados"}`}
               right={st ? <Pill tone={st.tone}>{st.label}</Pill> : undefined}
             />
             <p className="font-mono text-5xl font-bold tabular-nums">
@@ -235,12 +275,12 @@ export function TwinView({ astronauts }: { astronauts: { id: string; name: strin
             {scan && (
               <p className={cn("mt-3 flex items-center gap-1.5 text-xs", scan.blue_suit_verified ? "text-normal" : "text-atencion")}>
                 {scan.blue_suit_verified ? <ShieldCheck className="size-4" /> : <ShieldAlert className="size-4" />}
-                {scan.blue_suit_verified ? "Calibrado con traje azul ajustado" : "Sin calibrar con el traje: medidas menos fiables"}
+                {scan.blue_suit_verified ? "Calibrado con traje azul ajustado" : local ? "Simulación con la cámara: no se guarda en el backend" : "Sin calibrar con el traje: medidas menos fiables"}
               </p>
             )}
             {!scan && load !== "loading" && (
               <p className="mt-3 text-[13px] text-muted">
-                {HAS_BACKEND ? `${person?.name ?? "Este tripulante"} todavía no tiene escaneos. Pulsa "Iniciar reconstrucción profunda" con la estación encendida.` : "Falta configurar el backend para leer los escaneos."}
+                {`${person?.name ?? "Este tripulante"} todavía no tiene escaneos. Pulsa "Cámara en vivo" para verlo aquí mismo.`}
               </p>
             )}
           </Card>

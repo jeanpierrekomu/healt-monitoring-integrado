@@ -7,7 +7,7 @@
 // Las fibras y los tendones son un dibujo sobre la superficie, no una disección anatómica real.
 import { Line, OrbitControls, useGLTF } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Suspense, useEffect, useMemo } from "react";
+import { Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { Joints, MuscleGroup, MuscleLevel, Proportions } from "@/services/muscle-scan";
 
@@ -31,11 +31,15 @@ function fitScales(j: Joints, p: Proportions | undefined) {
   const d = (a: string, b: string) => Math.hypot((j[a]?.x ?? 0) - (j[b]?.x ?? 0), (j[a]?.y ?? 0) - (j[b]?.y ?? 0), (j[a]?.z ?? 0) - (j[b]?.z ?? 0));
   const mid = (a: string, b: string) => ((j[a]?.y ?? 0) + (j[b]?.y ?? 0)) / 2;
   const T = Math.max(0.5, mid("left_shoulder", "right_shoulder") - mid("left_hip", "right_hip")); // torso del escaneo
-  const rel = (scan: number, model: number) => clamp(scan / T / (model / TORSO));
+  const rel = (scan: number, model: number) => clamp(scan / T / (model / TORSO), 0.88, 1.15);
+  // Articulaciones que la cámara no vio bien (p. ej. piernas fuera de cuadro): no se usan para dar forma.
+  const seen = (...names: string[]) => names.every((n) => (j[n]?.confidence ?? 1) > 0.5);
   const shoulder = rel(p?.widths?.biacromial_shoulder_width ?? d("left_shoulder", "right_shoulder"), M.shoulderW);
   const hip = rel(p?.widths?.biiliac_hip_width ? p.widths.biiliac_hip_width * 0.62 : d("left_hip", "right_hip"), M.hipW);
   const waist = p?.widths?.waist_width_estimated ? rel(p.widths.waist_width_estimated, 0.34) : (shoulder + hip) / 2;
-  const leg = rel((d("left_hip", "left_knee") + d("left_knee", "left_ankle") + d("right_hip", "right_knee") + d("right_knee", "right_ankle")) / 2, M.hipY - M.ankleY);
+  const leg = seen("left_knee", "right_knee", "left_ankle", "right_ankle")
+    ? rel((d("left_hip", "left_knee") + d("left_knee", "left_ankle") + d("right_hip", "right_knee") + d("right_knee", "right_ankle")) / 2, M.hipY - M.ankleY)
+    : 1;
   const z = p?.depths_z;
   return {
     shoulder, waist, hip, leg,
@@ -199,6 +203,20 @@ function Body({ joints, proportions, levels, heat }: {
   return <mesh geometry={geometry} material={material} />;
 }
 
+/** Inclina y gira el cuerpo siguiendo a la persona (cámara en vivo); sin cámara, vuelve a quedar derecho. */
+function Follow({ lean, children }: { lean: { roll: number; yaw: number } | null; children: React.ReactNode }) {
+  const ref = useRef<THREE.Group>(null);
+  useFrame((_, dt) => {
+    const g = ref.current;
+    if (!g) return;
+    const k = Math.min(1, dt * 7);
+    const clampAngle = (v: number, m: number) => Math.max(-m, Math.min(m, v));
+    g.rotation.z += (clampAngle(-(lean?.roll ?? 0), 0.6) - g.rotation.z) * k;
+    g.rotation.y += (clampAngle(-(lean?.yaw ?? 0), 0.9) - g.rotation.y) * k;
+  });
+  return <group ref={ref}>{children}</group>;
+}
+
 /** Esqueleto que midió la cámara, dibujado sobre el modelo (misma escala del torso). */
 function ScannedSkeleton({ joints }: { joints: Joints }) {
   const pts = useMemo(() => {
@@ -224,8 +242,10 @@ function ScannedSkeleton({ joints }: { joints: Joints }) {
   );
 }
 
-export default function MuscleTwin({ joints, proportions, levels, heat, showJoints, spin }: {
+export default function MuscleTwin({ joints, proportions, levels, heat, showJoints, spin, lean = null }: {
   joints: Joints; proportions?: Proportions; levels: Partial<Record<MuscleGroup, MuscleLevel>>; heat: boolean; showJoints: boolean; spin: boolean;
+  /** Con la cámara en vivo: cuánto se inclina y gira la persona. */
+  lean?: { roll: number; yaw: number } | null;
 }) {
   return (
     <Canvas dpr={[1, 2]} camera={{ position: [0, 0.05, 4.9], fov: 34 }} gl={{ antialias: true, alpha: true }}>
@@ -234,10 +254,12 @@ export default function MuscleTwin({ joints, proportions, levels, heat, showJoin
       <directionalLight position={[-4, 2, -4]} intensity={1.4} color="#8fb6ff" />
       <pointLight position={[0, -1.5, 3]} intensity={5} color="#ffd9c7" />
       <Suspense fallback={null}>
-        <group scale={SIZE}>
-          <Body joints={joints} proportions={proportions} levels={levels} heat={heat} />
-          {showJoints && <ScannedSkeleton joints={joints} />}
-        </group>
+        <Follow lean={lean}>
+          <group scale={SIZE}>
+            <Body joints={joints} proportions={proportions} levels={levels} heat={heat} />
+            {showJoints && <ScannedSkeleton joints={joints} />}
+          </group>
+        </Follow>
       </Suspense>
       {/* Aro de referencia bajo los pies */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.93 * SIZE, 0]}>

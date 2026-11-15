@@ -64,7 +64,7 @@ La clave solo se usa en el servidor (`app/api/tts`); nunca llega al navegador. `
 | Misiones | `/missions` | Misiones en curso, planificadas y completadas |
 | Monitorización | `/monitoring` | Holograma del cuerpo, corazón en vivo, salud ósea y modo sueño |
 | Medición en vivo | `/live` | Cámara que sigue hasta a dos personas y cuatro lecturas (pulso, oxigenación, temperatura, movimiento) |
-| Gemelo muscular | `/twin` | Cuerpo 3D en rojo con fibras, ajustado a las proporciones del último escaneo, con postura y carga muscular |
+| Gemelo muscular | `/twin` | Cuerpo 3D en rojo con fibras, ajustado al último escaneo del backend, con postura y carga muscular. "Cámara en vivo" lo simula solo en el frontend: el modelo sigue a la persona en tiempo real |
 | Masa corporal | `/camera` | Estima la masa con la cámara: una vista de frente y otra de perfil |
 | Alertas | `/alerts` | Historial de alertas y su revisión |
 | Laboratorio IA | `/ai/vision` | Demostraciones de visión, audio y evaluación del modelo |
