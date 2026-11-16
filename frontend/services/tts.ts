@@ -1,6 +1,8 @@
 // Voz de las alertas. Pide el audio a nuestra ruta /api/tts (que habla con ElevenLabs en el servidor:
 // la clave nunca llega al navegador). Si no hay clave, falla la red o se acaban los créditos,
 // usa la voz del navegador para que la demo no se quede muda.
+import { getLang, translate } from "@/lib/i18n";
+
 export type VoiceEngine = "elevenlabs" | "browser";
 
 const cache = new Map<string, string>(); // texto → URL del audio (para no pagar dos veces la misma frase)
@@ -33,8 +35,10 @@ function browserSpeak(text: string): Promise<void> {
   return new Promise((resolve) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return resolve();
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = "es-ES";
-    const voice = window.speechSynthesis.getVoices().find((v) => v.lang.toLowerCase().startsWith("es"));
+    // La voz del navegador sigue el idioma de la interfaz.
+    const lang = getLang();
+    u.lang = lang === "en" ? "en-US" : "es-ES";
+    const voice = window.speechSynthesis.getVoices().find((v) => v.lang.toLowerCase().startsWith(lang));
     if (voice) u.voice = voice;
     u.rate = 1.02;
     u.onend = () => resolve();
@@ -55,7 +59,7 @@ function playUrl(url: string): Promise<boolean> {
 
 // Efectos de sonido sintetizados en el navegador (sin archivos ni créditos), imitando los niveles del
 // sistema de Precaución y Advertencia de la Estación Espacial: más urgente = más agudo y más rápido.
-// Sin sirenas de ambulancia: máxima = ráfagas de pitidos de monitor, grave = tonos medios, leve = campanita.
+// Máxima = sirena que sube y baja + pitidos, grave = sirena de dos tonos, leve = campanita.
 // Las grabaciones reales de la ISS no se publican con licencia libre, por eso se recrean aquí.
 // También sigue la norma de alarmas médicas IEC 60601-1-8 (más urgente = más agudo y más rápido).
 let ctx: AudioContext | null = null;
@@ -101,22 +105,6 @@ function beeps(t: number, freqs: number[], gap: number, len: number, vol: number
   return freqs.length * gap;
 }
 
-/** Tono intermitente (Precaución): pitidos medios con pausas. */
-function intermittent(t: number, count: number, on: number, off: number, f: number, vol: number) {
-  const { ac, out } = audio();
-  for (let i = 0; i < count; i++) {
-    const s = t + i * (on + off);
-    const o = ac.createOscillator();
-    o.type = "triangle";
-    o.frequency.value = f;
-    const g = envelope(ac, s, on, vol);
-    o.connect(g).connect(out);
-    o.start(s);
-    o.stop(s + on + 0.02);
-  }
-  return count * (on + off);
-}
-
 /** Campanita suave (dos notas con armónicos que se apagan). */
 function chime(t: number, vol: number) {
   const { ac, out } = audio();
@@ -141,6 +129,45 @@ function chime(t: number, vol: number) {
   return 0.9;
 }
 
+/** Sirena que sube y baja (alerta máxima). */
+function wail(t: number, cycles: number, low: number, high: number, period: number, vol: number) {
+  const { ac, out } = audio();
+  const len = cycles * period;
+  const o = ac.createOscillator();
+  o.type = "sawtooth";
+  o.frequency.setValueAtTime(low, t);
+  for (let i = 0; i < cycles; i++) {
+    o.frequency.linearRampToValueAtTime(high, t + i * period + period * 0.5);
+    o.frequency.linearRampToValueAtTime(low, t + (i + 1) * period);
+  }
+  // Filtro para que suene a sirena y no a zumbido áspero.
+  const lp = ac.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = 2600;
+  const g = envelope(ac, t, len, vol);
+  o.connect(lp).connect(g).connect(out);
+  o.start(t);
+  o.stop(t + len + 0.05);
+  return len;
+}
+
+/** Sirena de dos tonos alternados (alerta grave). */
+function hiLo(t: number, pairs: number, high: number, low: number, each: number, vol: number) {
+  const { ac, out } = audio();
+  const len = pairs * 2 * each;
+  const o = ac.createOscillator();
+  o.type = "square";
+  for (let i = 0; i < pairs * 2; i++) o.frequency.setValueAtTime(i % 2 === 0 ? high : low, t + i * each);
+  const lp = ac.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = 2200;
+  const g = envelope(ac, t, len, vol);
+  o.connect(lp).connect(g).connect(out);
+  o.start(t);
+  o.stop(t + len + 0.05);
+  return len;
+}
+
 export type ToneLevel = "atencion" | "advertencia" | "critico" | "normal";
 
 /** Toca el efecto de la prioridad y espera a que termine. */
@@ -152,12 +179,12 @@ export function playSiren(level: ToneLevel): Promise<void> {
       const t = ac.currentTime + 0.03;
       let len = 0;
       if (level === "critico") {
-        // Máxima: dos ráfagas de pitidos agudos de monitor (sin sirena).
-        len = beeps(t, [1568, 1568, 1568], 0.17, 0.12, 0.26);
-        len += beeps(t + len + 0.25, [1568, 1568, 1568], 0.17, 0.12, 0.26) + 0.25;
+        // Máxima: sirena que sube y baja, y luego tres pitidos agudos.
+        len = wail(t, 2, 620, 1380, 1.1, 0.2);
+        len += beeps(t + len + 0.1, [1568, 1568, 1568], 0.17, 0.12, 0.24) + 0.1;
       } else if (level === "advertencia") {
-        // Grave: tres tonos medios, más lentos.
-        len = intermittent(t, 3, 0.22, 0.16, 880, 0.15);
+        // Grave: sirena de dos tonos.
+        len = hiLo(t, 2, 960, 770, 0.32, 0.12);
       } else if (level === "atencion") {
         // Leve: campanita suave.
         len = chime(t, 0.18);
@@ -222,7 +249,8 @@ async function drain() {
 
 /** Pone una frase en la cola: se leen de a una, sin pisarse. */
 export function speak(text: string, onEngine?: (e: VoiceEngine) => void, tone?: ToneLevel) {
-  queue.push({ text, onEngine, tone });
+  // Con la interfaz en inglés, la frase se dice en inglés (si el diccionario ya cargó).
+  queue.push({ text: getLang() === "en" ? translate(text) : text, onEngine, tone });
   void drain();
 }
 

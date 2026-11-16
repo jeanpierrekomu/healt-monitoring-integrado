@@ -20,13 +20,15 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Antes de `npm run dev`, abre `frontend/.env.local` y completa `NEXT_PUBLIC_SUPABASE_KEY` con la clave **publicable** de Supabase (nunca la secreta). Luego abre <http://localhost:3000>.
+Antes de `npm run dev`, abre `frontend/.env.local` y completa `NEXT_PUBLIC_SUPABASE_ANON_KEY` con la clave **publicable** de Supabase (nunca la secreta). Luego abre <http://localhost:3000>.
+
+**Vercel:** Root Directory `frontend`; variables `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY` (base actual). Las de la base anterior (`NEXT_PUBLIC_LEGACY_SUPABASE_URL` / `_KEY`) se dejan vacías.
 
 Sin esa clave, la app funciona igual con datos de ejemplo.
 
 ## Cómo se conectan
 
-El frontend lee el backend directamente por el API de Supabase:
+El **visor en Tierra** (`/ground`) lee la base de Supabase actual (ver `frontend/README.md`). La tabla siguiente es de la **base anterior**, ya deshabilitada; sin sus variables, el visor del espacio usa datos de ejemplo:
 
 | Tabla del backend | Pantalla del frontend |
 | --- | --- |

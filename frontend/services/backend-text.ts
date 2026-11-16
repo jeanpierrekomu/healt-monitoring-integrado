@@ -36,7 +36,7 @@ export function describeReason(reason: string): { kind: ReasonKind; title: strin
   if (reason.includes("Vision event")) {
     const pose = reason.match(/pose=([a-z_]+)/)?.[1];
     const dist = reason.match(/dist=([\d.]+)m/)?.[1];
-    const bits = [pose ? (POSE[pose] ?? pose) : null, dist ? `a ${dist} m` : null].filter(Boolean);
+    const bits = [pose ? (POSE[pose] ?? pose) : null, dist ? `${dist} m de distancia` : null].filter(Boolean);
     return { kind: "vision", title: "Evento de visión", value: bits.join(" · ") || "—" };
   }
   const hr = reason.match(/HR=([\d.]+)/)?.[1];

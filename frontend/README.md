@@ -24,7 +24,25 @@ npm run build
 npm run start
 ```
 
-## Backend (Supabase)
+## Visor en Tierra (base de Supabase actual)
+
+El rol "Visor en Tierra" (`/ground`) es un sistema de consulta y simulación conectado a la base de Supabase actual:
+Panel, Astronautas, Misiones, Monitorización, Alertas, Historial, Dispositivos y Simulación.
+
+- Conexión: `lib/supabase.ts` (variables `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY`).
+- Tipos de las tablas: `types/database.ts` (solo columnas confirmadas contra la base).
+- Consultas: `lib/queries/`. Interfaz: `components/ground/`. Motor de simulación: `lib/ground/sim.ts`.
+- Solo lectura: el navegador nunca escribe en la base. La simulación corre en el navegador con una semilla
+  reproducible y todo lo que genera se marca como SIMULADO / SINTÉTICO.
+- Cada dato se etiqueta según su procedencia: REAL, RECONSTRUIDO o SINTÉTICO.
+
+## Base anterior (deshabilitada)
+
+La conexión del primer backend (`services/supabase.ts`, `services/backend.ts`) usa ahora sus propias variables
+`NEXT_PUBLIC_LEGACY_SUPABASE_URL` y `NEXT_PUBLIC_LEGACY_SUPABASE_KEY`. Si están vacías, el visor del espacio funciona
+con sus datos de ejemplo y no hace ninguna consulta.
+
+## Backend (Supabase) — base anterior
 
 1. Copia `.env.example` como `.env.local`.
 2. Completa `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_KEY` (la clave **publicable**, nunca la secreta).
@@ -55,10 +73,18 @@ Las alertas pueden hablar con una voz de ElevenLabs. Sin clave, la app usa la vo
 
 La clave solo se usa en el servidor (`app/api/tts`); nunca llega al navegador. `.env.local` no se sube a git.
 
+## Idioma
+
+La interfaz sale en **inglés por defecto** y tiene un botón EN / ES en la barra superior; la elección se recuerda en el navegador.
+
+El código está escrito en español. El inglés se aplica con un diccionario (`lib/i18n/en.json`) sobre los textos ya dibujados (`components/i18n/translator.tsx`). Si agregas un texto nuevo en español, añade su traducción a ese diccionario; si falta, ese texto se verá en español.
+
 ## Secciones
 
 | Sección | Ruta | Qué muestra |
 | --- | --- | --- |
+| Selección de rol | `/` | Pantalla inicial tipo videojuego: visor en Tierra o visor en el espacio, con personajes 3D |
+| Visor en Tierra | `/ground` | Control de misión: tripulación, cola de alertas por revisar, retraso de la señal y recomendación para la nave (primera versión) |
 | Dashboard | `/dashboard` | Resumen de la misión, tripulación, descanso y botón "Probar alertas" |
 | Astronautas | `/astronauts` | Lista y perfil de cada astronauta, con sus valores habituales |
 | Misiones | `/missions` | Misiones en curso, planificadas y completadas |

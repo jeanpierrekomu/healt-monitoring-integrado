@@ -77,7 +77,7 @@ export function Sidebar() {
           <p className="truncate text-[13px] font-semibold">Dra. Rivera</p>
           <p className="truncate text-[11px] text-muted">Médico de vuelo</p>
         </div>
-        <Link href="/login" title="Cerrar sesión" className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface hover:text-fg">
+        <Link href="/" title="Cambiar de rol" className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface hover:text-fg">
           <LogOut className="size-4" />
         </Link>
       </div>

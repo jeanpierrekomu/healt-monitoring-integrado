@@ -10,6 +10,7 @@ import type { Status } from "@/lib/types";
 import { Logo } from "./sidebar";
 import { VoiceToggle } from "@/components/alerts/alert-popup";
 import { AmbienceControl } from "@/components/ambience/ambience-control";
+import { LangToggle } from "@/components/i18n/translator";
 
 export interface NotificationItem {
   id: string;
@@ -134,6 +135,7 @@ export function Topbar({ notifications }: { notifications: NotificationItem[] })
         </span>
         Artemis-H · día 42 · <MissionClock />
       </div>
+      <LangToggle />
       <AmbienceControl />
       <VoiceToggle />
       <Notifications items={notifications} />

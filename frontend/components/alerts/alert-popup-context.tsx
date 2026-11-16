@@ -35,7 +35,7 @@ interface AlertPopupValue {
 }
 
 const Ctx = createContext<AlertPopupValue | null>(null);
-const AUTO_KEY = "hm-alertas-activas"; // apagadas por defecto: solo salen si se encienden
+const AUTO_KEY = "hm-alertas-activas"; // encendidas por defecto; se apagan con el botón de la barra superior
 const VOICE_KEY = "hm-voz";
 const COOLDOWN_MS = 3 * 60_000; // misma variable y persona: no repetir antes de 3 min…
 const WORSEN_FACTOR = 1.4; // …salvo que empeore claramente (40 % más lejos de su normal)
@@ -54,8 +54,8 @@ export function AlertPopupProvider({
   // La voz viene activada por defecto; solo se apaga si el usuario la desactivó.
   const [voiceOn, setVoiceOn] = useState(true);
   const [silenced, setSilenced] = useState(false);
-  const [autoOn, setAutoOn] = useState(false);
-  const autoRef = useRef(false);
+  const [autoOn, setAutoOn] = useState(true);
+  const autoRef = useRef(true);
   useEffect(() => {
     autoRef.current = autoOn;
   }, [autoOn]);
@@ -213,7 +213,7 @@ export function AlertPopupProvider({
     try {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- preferencia guardada en el navegador
       setVoiceOn(window.localStorage.getItem(VOICE_KEY) !== "0");
-      const auto = window.localStorage.getItem(AUTO_KEY) === "1";
+      const auto = window.localStorage.getItem(AUTO_KEY) !== "0";
       autoRef.current = auto;
       setAutoOn(auto);
     } catch {

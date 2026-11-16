@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MissionClock, PageHeader } from "@/components/ui/animated";
 import { Button, Card, LiveBadge, Pill, type PillTone } from "@/components/ui/primitives";
 import type { Vitals } from "@/lib/types";
+import { translate } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { BONES, JOINTS, loadPose } from "@/services/pose";
 
@@ -299,7 +300,7 @@ export function LiveView({ astronauts }: { astronauts: Person[] }) {
       }
       octx.stroke();
       octx.font = "600 11px ui-monospace, monospace";
-      const text = `${namesRef.current[i].toUpperCase()} · MOVIMIENTO ${Math.round(act * 100)} %`;
+      const text = `${namesRef.current[i].toUpperCase()} · ${translate("MOVIMIENTO")} ${Math.round(act * 100)} %`;
       const tw = octx.measureText(text).width + 14;
       const ty = y1 > 26 ? y1 - 24 : y1 + 6;
       octx.fillStyle = "rgba(7,11,20,0.78)";

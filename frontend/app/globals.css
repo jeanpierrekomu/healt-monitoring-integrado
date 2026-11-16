@@ -102,3 +102,11 @@ body {
 .alert-pop-in-top { animation: alert-pop-in-top 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .alert-pop-in-side { animation: alert-pop-in-side 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .alert-vignette { animation: alert-vignette 1s ease-in-out infinite; }
+
+/* Mientras se aplica el inglés, la página no se muestra (evita ver el español un instante). */
+html.i18n-wait body {
+  opacity: 0;
+}
+body {
+  transition: opacity 0.15s ease-out;
+}

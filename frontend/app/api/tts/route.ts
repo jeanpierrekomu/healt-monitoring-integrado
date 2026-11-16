@@ -5,7 +5,8 @@
 //   ELEVENLABS_MODEL_ID  opcional (por defecto eleven_multilingual_v2, habla español)
 const MAX_CHARS = 300;
 // Solo frases generadas por la app (services/alert-messages.ts): nadie puede usar la clave para leer texto arbitrario.
-const ALLOWED = /^Alerta (leve|grave|máxima)\. [\p{L}\p{N} ,.:%°ºáéíóúñü¿?¡!-]+$/u;
+// Solo frases de alerta, en español o en inglés.
+const ALLOWED = /^(Alerta (leve|grave|máxima)|(Minor|Serious|Critical) alert)\. [\p{L}\p{N} ,.:%°ºáéíóúñü¿?¡!'-]+$/u;
 
 let autoVoice: string | null = null;
 

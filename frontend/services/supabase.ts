@@ -1,7 +1,9 @@
-// Conexión al backend (Supabase). Se usa la clave PUBLICABLE, que está pensada para el navegador.
-// Si no hay variables de entorno o el backend no responde, los servicios vuelven a los datos de ejemplo.
-export const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-export const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_KEY ?? "";
+// Conexión a la base ANTERIOR (Supabase del primer backend), que ya no está habilitada.
+// Usa variables propias (LEGACY) para no chocar con la base nueva, que usa NEXT_PUBLIC_SUPABASE_URL y
+// NEXT_PUBLIC_SUPABASE_ANON_KEY (ver lib/supabase.ts). Sin estas variables, el visor del espacio
+// funciona con sus datos de ejemplo y no hace ninguna consulta.
+export const SB_URL = process.env.NEXT_PUBLIC_LEGACY_SUPABASE_URL ?? "";
+export const SB_KEY = process.env.NEXT_PUBLIC_LEGACY_SUPABASE_KEY ?? "";
 export const HAS_BACKEND = Boolean(SB_URL && SB_KEY);
 
 /** Lee filas de una tabla. `query` va en formato PostgREST, p. ej. "select=*&order=id.desc&limit=50". */

@@ -171,6 +171,7 @@ function Body({ joints, proportions, levels, heat }: {
   );
   const material = useMemo(() => {
     const m = new THREE.MeshStandardMaterial({ color: "#c41f1a", roughness: 0.42, metalness: 0.05 });
+    m.customProgramCacheKey = () => "gemelo-muscular";
     m.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, uniforms);
       shader.vertexShader = shader.vertexShader
