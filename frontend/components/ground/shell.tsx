@@ -1,7 +1,7 @@
 "use client";
 
 // Marco del visor en Tierra: cabecera y menú de secciones del sistema de simulación.
-import { Activity, Bell, Cpu, FlaskConical, History, LayoutDashboard, Radio, Repeat, Rocket, Satellite, Users } from "lucide-react";
+import { Activity, Bell, CircuitBoard, Cpu, FlaskConical, History, LayoutDashboard, Radio, Repeat, Rocket, Satellite, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense } from "react";
@@ -18,6 +18,7 @@ const NAV = [
   { href: "/ground/history", label: "Historial", icon: History },
   { href: "/ground/devices", label: "Dispositivos", icon: Cpu },
   { href: "/ground/simulation", label: "Simulación", icon: FlaskConical },
+  { href: "/ground/hardware", label: "Hardware", icon: CircuitBoard },
 ];
 
 function CurrentNav() {
