@@ -1,8 +1,6 @@
-import type { Metadata } from "next";
-import { LoginView } from "./login-view";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Iniciar sesión" };
-
+// Ya no hay inicio de sesión: quien entre por /login va directo a la selección de rol.
 export default function LoginPage() {
-  return <LoginView />;
+  redirect("/");
 }
