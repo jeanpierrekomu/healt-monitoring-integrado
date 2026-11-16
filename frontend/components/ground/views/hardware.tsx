@@ -4,10 +4,12 @@
 // luego las dos placas se juntan en "sándwich" y al final se cierra la carcasa.
 // La lista de piezas entra con una animación escalonada hecha con anime.js.
 import { animate, stagger } from "animejs";
-import { Box, Layers, Pause, Play, RotateCw, Sparkles } from "lucide-react";
+import { Box, Layers, Pause, Play, RotateCw, Sparkles, X } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PageTitle } from "@/components/ground/shell";
+import { HardwarePhotos } from "@/components/ground/views/hardware-photos";
 import { Panel, SimulatedTag, Tag } from "@/components/ground/ui";
 import type { PartId, Readings } from "@/components/three/hardware-proto";
 import { rng } from "@/lib/ground/sim";
@@ -18,33 +20,73 @@ const HardwareProto = dynamic(() => import("@/components/three/hardware-proto"),
   loading: () => <div className="skeleton size-full rounded-lg" />,
 });
 
+// Fichas de las piezas, por ahora solo en inglés (el contenido no pasa por el traductor).
 interface PartInfo {
   id: PartId;
   name: string;
   model: string;
   where: string;
   measures?: string;
-  text: string;
+  what: string;
+  how: string;
+  specs: string[];
 }
 
 const PARTS: PartInfo[] = [
-  { id: "max30102", name: "Sensor óptico de frecuencia cardíaca", model: "MAX30102", where: "Placa inferior · contra la piel", measures: "Ritmo cardíaco (BPM) · SpO₂", text: "Emite luz roja e infrarroja que atraviesa la piel; según cuánta luz vuelve, calcula las pulsaciones por minuto y el oxígeno en la sangre." },
-  { id: "temp", name: "Sensor de temperatura", model: "MAX30205", where: "Placa inferior · contra la piel", measures: "Temperatura corporal", text: "Mide la temperatura en contacto con la piel con precisión de décimas de grado." },
-  { id: "mpu", name: "Acelerómetro y giroscopio", model: "MPU6050 (compatible MPU6515)", where: "Placa inferior", measures: "Movimiento y rotación", text: "Detecta aceleración y giro en tres ejes: sirve para saber si el astronauta se mueve, está quieto o tuvo un golpe." },
-  { id: "esp32", name: "Microcontrolador con Wi-Fi y Bluetooth", model: "ESP32-WROOM-32", where: "Placa superior", text: "Lee los sensores por I²C y envía los datos por Wi-Fi o Bluetooth a la estación." },
-  { id: "oled", name: "Pantalla", model: 'OLED SSD1306 0,96" (128 × 64)', where: "Placa superior", text: "Muestra las mediciones al momento, sin necesidad de otro equipo." },
-  { id: "boards", name: "Placas perforadas en sándwich", model: "2 × placa de 7 × 9 cm", where: "Unidas con separadores y cables", text: "Arriba va la electrónica y la pantalla; abajo, los sensores mirando hacia la piel." },
-  { id: "case", name: "Carcasa", model: "Dos mitades", where: "Envuelve el sándwich", text: "Protege las placas; deja visible la pantalla arriba y los sensores en contacto con la piel abajo." },
+  {
+    id: "max30102", name: "Optical heart-rate sensor", model: "MAX30102", where: "Bottom board · against the skin", measures: "Heart rate (BPM) · SpO₂",
+    what: "Measures the astronaut's pulse and blood oxygen level without needles or cuffs.",
+    how: "Two LEDs shine red and infrared light into the skin. A photodetector reads how much light comes back: blood absorbs more light with every heartbeat, so the signal pulses with the heart. Comparing red and infrared light gives the oxygen saturation.",
+    specs: ["Red (660 nm) and infrared (880 nm) LEDs", "Built-in photodetector and 18-bit converter", "I²C interface"],
+  },
+  {
+    id: "temp", name: "Body temperature sensor", model: "MAX30205", where: "Bottom board · against the skin", measures: "Body temperature",
+    what: "Tracks the astronaut's body temperature to spot fever or overheating early.",
+    how: "Placed in contact with the skin, it converts temperature into a digital reading. It is designed for clinical-grade body temperature, so it is most precise in the human range.",
+    specs: ["±0.1 °C accuracy (37–39 °C)", "16-bit resolution", "I²C interface"],
+  },
+  {
+    id: "mpu", name: "Accelerometer and gyroscope", model: "MPU6050 (MPU6515 compatible)", where: "Bottom board", measures: "Movement · rotation",
+    what: "Detects how the astronaut moves: activity, stillness, sudden impacts or falls, and body orientation.",
+    how: "A 3-axis accelerometer measures changes in speed and a 3-axis gyroscope measures rotation. Together they describe movement in all directions, which also helps flag readings taken while moving.",
+    specs: ["3-axis accelerometer (±2 to ±16 g)", "3-axis gyroscope (±250 to ±2000 °/s)", "I²C interface"],
+  },
+  {
+    id: "esp32", name: "Microcontroller with Wi-Fi and Bluetooth", model: "ESP32-WROOM-32", where: "Top board", 
+    what: "The brain of AZRIEL: it reads every sensor, processes the data and sends it to the station.",
+    how: "All sensors share the same I²C bus. The ESP32 polls them, computes the values and transmits them over Wi-Fi or Bluetooth; it also drives the screen.",
+    specs: ["Dual-core processor up to 240 MHz", "Wi-Fi 802.11 b/g/n and Bluetooth / BLE", "USB-C for power and programming"],
+  },
+  {
+    id: "oled", name: "Display", model: 'OLED SSD1306 0.96" (128 × 64)', where: "Top board",
+    what: "Shows the live measurements on the device itself, so the crew can check them without another screen.",
+    how: "A small monochrome OLED panel: each pixel lights up on its own, so it is readable and uses little power.",
+    specs: ["128 × 64 pixels", "0.96-inch panel", "I²C interface"],
+  },
+  {
+    id: "boards", name: "Stacked perfboards", model: "2 × 7 × 9 cm boards", where: "Joined by standoffs and wires",
+    what: "Hold all the components in a compact sandwich.",
+    how: "The top board carries the electronics and the screen; the bottom board carries the sensors facing the skin. Brass standoffs keep them apart and wires connect them.",
+    specs: ["Top: ESP32 + display", "Bottom: MPU6050, MAX30205, MAX30102", "Wired connection between boards"],
+  },
+  {
+    id: "case", name: "Case", model: "Two halves", where: "Wraps the sandwich",
+    what: "Protects the boards and makes the device wearable.",
+    how: "The top half leaves a window for the display; the bottom half exposes the sensors so they touch the skin.",
+    specs: ["Display window on top", "Sensor area underneath"],
+  },
 ];
 
+// Orden del recorrido: primero el dispositivo terminado y luego se va desarmando.
 const STAGES = [
-  { value: 0, label: "Cómo está armado", icon: Layers },
-  { value: 1, label: "Sándwich", icon: Box },
   { value: 2, label: "Con carcasa", icon: Sparkles },
+  { value: 1, label: "Sándwich", icon: Box },
+  { value: 0, label: "Cómo está armado", icon: Layers },
 ];
 
 export function HardwareView() {
-  const [stage, setStage] = useState(0);
+  const [stage, setStage] = useState(2);
+  const [view, setView] = useState<"model" | "photos">("model");
   const [selected, setSelected] = useState<PartId | null>(null);
   const [spin, setSpin] = useState(true);
   const [playing, setPlaying] = useState(true);
@@ -52,12 +94,12 @@ export function HardwareView() {
   const listRef = useRef<HTMLUListElement>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  // Recorrido automático: piezas separadas → sándwich → carcasa (como el traje del astronauta).
+  // Recorrido automático: con carcasa → sándwich → cómo está armado (como el traje del astronauta).
   const play = useCallback(() => {
     timers.current.forEach(clearTimeout);
     setPlaying(true);
-    setStage(0);
-    timers.current = [setTimeout(() => setStage(1), 2600), setTimeout(() => setStage(2), 5600), setTimeout(() => setPlaying(false), 7200)];
+    setStage(2);
+    timers.current = [setTimeout(() => setStage(1), 2600), setTimeout(() => setStage(0), 5600), setTimeout(() => setPlaying(false), 7200)];
   }, []);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- el recorrido arranca solo al abrir la pantalla
@@ -95,18 +137,38 @@ export function HardwareView() {
     setPlaying(false);
     setStage(v);
   };
+  // Al elegir una pieza interna, el modelo se desarma para que se vea.
+  const pick = useCallback((id: PartId | null) => {
+    setSelected(id);
+    if (id && id !== "case") {
+      timers.current.forEach(clearTimeout);
+      setPlaying(false);
+      setStage(0);
+    }
+  }, []);
 
   return (
     <>
       <PageTitle
         title="Hardware · AZRIEL"
         subtitle="Prototipo del dispositivo AZRIEL: dos placas en sándwich con 5 componentes principales que miden ritmo cardíaco, oxigenación, temperatura y movimiento."
-        right={<Tag tone="gray">Modelo armado con las medidas de los módulos</Tag>}
+        right={
+          <div className="flex rounded-md border border-border p-0.5 text-[13px]" role="tablist">
+            {([["model", "Modelo 3D"], ["photos", "Fotos reales"]] as const).map(([k, label]) => (
+              <button key={k} type="button" role="tab" aria-selected={view === k} onClick={() => setView(k)} className={cn("h-8 rounded px-3 font-semibold", view === k ? "bg-cyan-400/15 text-cyan-300" : "text-muted hover:text-fg")}>
+                {label}
+              </button>
+            ))}
+          </div>
+        }
       />
+      {view === "photos" ? (
+        <HardwarePhotos />
+      ) : (
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
         <section className="relative overflow-hidden rounded-lg border border-border bg-[radial-gradient(ellipse_at_center,#0f1a2e_0%,#060a12_75%)]">
           <div className="h-[560px] md:h-[640px]">
-            <HardwareProto stage={stage} selected={selected} onSelect={setSelected} readings={readings} spin={spin} />
+            <HardwareProto stage={stage} selected={selected} onSelect={pick} readings={readings} spin={spin} />
           </div>
           <div className="absolute inset-x-0 top-0 flex flex-wrap items-center gap-2 p-3">
             {STAGES.map(({ value, label, icon: Icon }, i) => (
@@ -131,22 +193,49 @@ export function HardwareView() {
               </button>
             </span>
           </div>
+          <AnimatePresence>
+            {info && (
+              <motion.div
+                key={info.id}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 12 }}
+                transition={{ duration: 0.25 }}
+                className="absolute top-14 left-3 w-[min(400px,calc(100%-24px))] rounded-lg border border-cyan-400/40 bg-[#060a12]/90 p-4 shadow-2xl backdrop-blur"
+                data-no-i18n
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-mono text-[10px] tracking-[0.2em] text-cyan-300 uppercase">{info.model}</p>
+                    <h3 className="mt-0.5 text-[15px] leading-tight font-bold">{info.name}</h3>
+                    <p className="mt-0.5 text-[11px] text-muted">{info.where}</p>
+                  </div>
+                  <button type="button" onClick={() => setSelected(null)} className="text-muted hover:text-fg" aria-label="Close">
+                    <X className="size-4" />
+                  </button>
+                </div>
+                {info.measures && <p className="mt-2"><Tag tone="cyan">Measures: {info.measures}</Tag></p>}
+                <p className="mt-2 text-[13px] leading-relaxed">{info.what}</p>
+                <p className="mt-2 text-[11px] font-semibold tracking-wider text-muted uppercase">How it works</p>
+                <p className="mt-0.5 text-[12px] leading-relaxed text-muted">{info.how}</p>
+                <ul className="mt-2 flex flex-wrap gap-1">
+                  {info.specs.map((x) => (
+                    <li key={x} className="rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted">{x}</li>
+                  ))}
+                </ul>
+              </motion.div>
+            )}
+          </AnimatePresence>
           <p className="pointer-events-none absolute right-3 bottom-3 text-[11px] text-muted">Arrastra para girar · rueda para acercar · toca una pieza</p>
         </section>
 
         <div className="flex flex-col gap-4">
-          <Panel title={info ? info.name : "Piezas"} subtitle={info ? `${info.model} · ${info.where}` : "Toca una pieza en el modelo o en la lista"}>
-            {info ? (
-              <div className="text-[13px]">
-                {info.measures && <p className="mb-2"><Tag tone="cyan">{info.measures}</Tag></p>}
-                <p className="leading-relaxed text-muted">{info.text}</p>
-                <button type="button" onClick={() => setSelected(null)} className="mt-3 text-xs font-semibold text-cyan-300 hover:underline">Ver todas las piezas</button>
-              </div>
-            ) : (
+          <Panel title="Piezas" subtitle="Toca una pieza en el modelo o en la lista">
+            {(
               <ul ref={listRef} className="flex flex-col gap-1.5">
                 {PARTS.map((p) => (
                   <li key={p.id} style={{ opacity: 0 }}>
-                    <button type="button" onClick={() => setSelected(p.id)} onMouseEnter={() => setSelected(null)} className="flex w-full items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-left text-[13px] hover:border-cyan-400/50">
+                    <button type="button" onClick={() => pick(p.id)} className={cn("flex w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-left text-[13px] hover:border-cyan-400/50", selected === p.id ? "border-cyan-400/60 bg-cyan-400/10" : "border-border")} data-no-i18n>
                       <span className="min-w-0">
                         <span className="block truncate font-semibold">{p.name}</span>
                         <span className="block truncate font-mono text-[11px] text-muted" data-no-i18n>{p.model}</span>
@@ -182,6 +271,7 @@ export function HardwareView() {
           </Panel>
         </div>
       </div>
+      )}
     </>
   );
 }
